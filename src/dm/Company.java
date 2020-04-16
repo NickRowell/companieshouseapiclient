@@ -19,7 +19,7 @@ import enums.api.TermsOfAccountPublication;
  * @author nrowell
  * @version $Id$
  */
-public class Company implements Serializable {
+public class Company implements Serializable, Vertex {
 	/**
 	 * The serialVersionUID.
 	 */
@@ -134,6 +134,8 @@ public class Company implements Serializable {
 	public Boolean undeliverable_registered_office_address;
 	
 	/**
+	 * TODO: move this out to dm package...?
+	 * 
 	 * Company accounts information.
 	 * 
 	 * @author nrowell
@@ -172,6 +174,9 @@ public class Company implements Serializable {
 		@Deprecated
 		public String overdue;
 		
+		/**
+		 * TODO: move this out to dm package...?
+		 */
 		public static class AccountingReferenceDate implements Serializable {
 			/**
 			 * The serialVersionUID.
@@ -186,6 +191,9 @@ public class Company implements Serializable {
 			 */
 			public Integer day;
 		}
+		/**
+		 * TODO: move this out to dm package...?
+		 */
 		public static class NextAccounts implements Serializable {
 			/**
 			 * The serialVersionUID.
@@ -208,6 +216,9 @@ public class Company implements Serializable {
 			 */
 			public Date period_start_on;
 		}
+		/**
+		 * TODO: move this out to dm package...?
+		 */
 		public static class LastAccounts implements Serializable {
 			/**
 			 * The serialVersionUID.
@@ -232,8 +243,10 @@ public class Company implements Serializable {
 			public AccountType type;
 		}
 	}
-	
+
 	/**
+	 * TODO: move this out to dm package...?
+	 * 
 	 * Annual return information. This member is only returned if a confirmation statement has not be filed.
 	 * @author nrowell
 	 * @version $Id$
@@ -264,6 +277,8 @@ public class Company implements Serializable {
 	}
 	
 	/**
+	 * TODO: move this out to dm package...?
+	 * 
 	 * UK branch of a foreign company.
 	 *
 	 * @author nrowell
@@ -289,6 +304,8 @@ public class Company implements Serializable {
 	}
 	
 	/**
+	 * TODO: move this out to dm package...?
+	 * 
 	 * Confirmation statement information.
 	 * 
 	 * @author nrowell
@@ -318,6 +335,8 @@ public class Company implements Serializable {
 	}
 
 	/**
+	 * TODO: move this out to dm package...?
+	 * 
 	 * Foreign company details.
 	 *
 	 * @author nrowell
@@ -360,7 +379,10 @@ public class Company implements Serializable {
 		 * Registration number in company of incorporation.
 		 */
 		public String registration_number;
-		
+
+		/**
+		 * TODO: move this out to dm package...?
+		 */
 		public static class AccountingRequirement implements Serializable {
 			/**
 			 * The serialVersionUID.
@@ -375,6 +397,9 @@ public class Company implements Serializable {
 			 */
 			public TermsOfAccountPublication terms_of_account_publication;
 		}
+		/**
+		 * TODO: move this out to dm package...?
+		 */
 		public static class Accounts implements Serializable {
 			/**
 			 * The serialVersionUID.
@@ -392,7 +417,10 @@ public class Company implements Serializable {
 			 * Time allowed from period end for disclosure of accounts under parent law.
 			 */
 			public MustFileWithin must_file_within;
-			
+
+			/**
+			 * TODO: move this out to dm package...?
+			 */
 			public static class AccountPeriodFrom implements Serializable {
 				/**
 				 * The serialVersionUID.
@@ -407,6 +435,9 @@ public class Company implements Serializable {
 				 */
 				public Integer month;
 			}
+			/**
+			 * TODO: move this out to dm package...?
+			 */
 			public static class AccountPeriodTo implements Serializable {
 				/**
 				 * The serialVersionUID.
@@ -421,6 +452,9 @@ public class Company implements Serializable {
 				 */
 				public Integer month;
 			}
+			/**
+			 * TODO: move this out to dm package...?
+			 */
 			public static class MustFileWithin implements Serializable {
 				/**
 				 * The serialVersionUID.
@@ -432,6 +466,9 @@ public class Company implements Serializable {
 				public Integer months;
 			}
 		}
+		/**
+		 * TODO: move this out to dm package...?
+		 */
 		public static class OriginatingRegistry implements Serializable {
 			/**
 			 * The serialVersionUID.
@@ -447,8 +484,10 @@ public class Company implements Serializable {
 			public String name;
 		}
 	}
-	
+
 	/**
+	 * TODO: move this out to dm package...?
+	 * 
 	 * Details of a previous company name.
 	 * 
 	 * @author nrowell
@@ -471,6 +510,30 @@ public class Company implements Serializable {
 		 * The previous company name.
 		 */
 		public String name;
+	}
+	
+	/**
+	 * The default constructor.
+	 */
+	public Company() {
+		
+	}
+	
+	/**
+	 * Constructor taking only the company number. This uniquely identifies the {@link Company}, and is the
+	 * field used in the {@link #equals(Object)} and {@link #hashCode()} methods. The other fields are not
+	 * populated.
+	 * 
+	 * @param company_number
+	 * 	The company number.
+	 */
+	public Company(String company_number) {
+		this.company_number = company_number;
+	}
+	
+	@Override
+	public String toString() {
+		return company_number;
 	}
 	
     /**

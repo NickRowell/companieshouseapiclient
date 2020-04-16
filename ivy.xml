@@ -29,6 +29,9 @@
 		<!-- https://mvnrepository.com/artifact/com.google.code.gson/gson -->
 		<dependency org="com.google.code.gson" name="gson" rev="2.2.4"/>
 		
+		<!-- https://mvnrepository.com/artifact/com.github.vlsi.mxgraph/jgraphx -->
+		<!--dependency org="com.github.vlsi.mxgraph" name="jgraphx" rev="4.0.5"/-->
+		
   	</dependencies>
 	
 	

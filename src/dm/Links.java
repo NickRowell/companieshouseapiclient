@@ -77,18 +77,6 @@ public class Links implements Serializable {
 	 */
 	public String self;
 	
-	
-	public static class OfficerLink implements Serializable {
-		/**
-		 * The serialVersionUID.
-		 */
-		private static final long serialVersionUID = 8691608672565445057L;
-		/**
-		 * The URL of the appointments resource.
-		 */
-		public String appointments;
-	}
-	
 	/**
 	 * {@inheritDoc}
 	 */

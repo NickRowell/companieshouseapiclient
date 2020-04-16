@@ -1,11 +1,20 @@
 package util;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Scanner;
+import java.util.logging.Logger;
 
 import dm.CompanyDbSnapshot;
 import enums.snapshot.AccountType;
@@ -18,82 +27,34 @@ import enums.snapshot.CompanyType;
  * @author nrowell
  * @version $Id$
  */
-public class ParseUtil {
+public final class ParseUtil {
+
+	/**
+	 * The logger.
+	 */
+	private static final Logger logger = Logger.getLogger(ParseUtil.class.getName());
 	
 	/**
-	 * Parses a {@link CompanyDbSnapshot} from a record in the Companies House database snapshot.
+	 * Private default constructor to prevent accidental instantiation.
+	 */
+	private ParseUtil() {
+	}
+	
+	/**
+	 * Tokenize a string on the given token, while ignoring instances of the delimiter that are contained
+	 * between double quotes.
+	 * 
+	 * TODO currently this method assumes every field is fully contained in quotes. Relax this.
 	 * 
 	 * @param txt
-	 * 	The String to parse.
+	 * 	The {@link String} to tokenize.
+	 * @param delim
+	 * 	The delimiter token.
 	 * @return
-	 * 	A {@link CompanyDbSnapshot} parsed from the text String.
+	 * 	A {@link List} of {@link String}s containing each token.
 	 */
-	public static CompanyDbSnapshot parseCompany(String txt) {
+	public static List<String> tokenizeWithQuotes(String txt, char delim) {
 		
-		/**
-		 * Comma-separated fields from one example record:
-		 * 
-		 * "!BIG IMPACT GRAPHICS LIMITED"
-		 * "07382019"
-		 * ""
-		 * ""
-		 * "335 ROSDEN HOUSE"
-		 * "372 OLD STREET"
-		 * "LONDON"
-		 * ""
-		 * ""
-		 * "EC1V 9AV"
-		 * "Private Limited Company"
-		 * "Active"
-		 * "United Kingdom"
-		 * ""
-		 * "21/09/2010"
-		 * "30"
-		 * "9"
-		 * "30/06/2017"
-		 * "30/09/2015"
-		 * "DORMANT"
-		 * "19/10/2016"
-		 * "21/09/2015"
-		 * "0"
-		 * "0"
-		 * "0"
-		 * "0"
-		 * "59112 - Video production activities"
-		 * "59113 - Television programme production activities"
-		 * "74100 - specialised design activities"
-		 * "74202 - Other specialist photography"
-		 * "0"
-		 * "0"
-		 * "http://business.data.gov.uk/id/company/07382019"
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * ""
-		 * "05/10/2018"
-		 * "21/09/2016"
-		 */
-		
-		// Cannot just tokenize the string on the commas because sometimes there are commas contained within the
-		// fields. Need to tokenise only on commas that are not contained within fields. Also, sometimes
-		// there are pairs of double quotes within double quotes: we need to track the level of quoting in order to figure
-		// out when we're not inside a quote.
 		char[] chars = txt.toCharArray();
 		List<String> fieldsList = new LinkedList<>();
 		
@@ -175,6 +136,217 @@ public class ParseUtil {
 				}
 			}
 		}
+		return fieldsList;
+	}
+	
+	/**
+	 * Tokenize a string on the given token, while ignoring instances of the delimiter that are contained
+	 * between double quotes.
+	 * 
+	 * @param txt
+	 * 	The {@link String} to tokenize.
+	 * @param delim
+	 * 	The delimiter token.
+	 * @return
+	 * 	A {@link List} of {@link String}s containing each token.
+	 */
+	public static List<String> tokenizeWithQuotes2(String txt, char delim) {
+		
+		char[] chars = txt.toCharArray();
+		List<String> fieldsList = new LinkedList<>();
+		
+		// Indicates if we are currently 'inside' a quote
+		boolean quoted = false;
+		
+		// Buffer to store the characters of field currently being read
+		List<Character> currentField = new LinkedList<>();
+		
+		for(int i=0; i<chars.length; i++) {
+			
+			// Special handling of double quotes
+			if(chars[i] == '"') {
+				if(!quoted) {
+					// Start of quoted section
+					quoted = true;
+				}
+				else {
+					if(i == chars.length-1 || chars[i+1] != '"') {
+						// End of quoted section
+						quoted = false;
+					}
+					else {
+						// Double quote contained in a field
+						currentField.add(chars[i]);
+						i++;
+					}
+				}
+			}
+			
+			// Special handling of commas
+			else if(chars[i] == ',') {
+				if(!quoted) {
+					// End of current field
+
+					char[] fieldChars = new char[currentField.size()];
+					int c=0;
+					for(Character ch : currentField) {
+						fieldChars[c++] = ch;
+					}
+					String field = new String(fieldChars);
+					// Trim any white space
+					field = field.trim();
+					fieldsList.add(field);
+					currentField.clear();
+				}
+				else {
+					// Add comma to the current field
+					currentField.add(chars[i]);
+				}
+			}
+			
+			// Everything else
+			else {
+				currentField.add(chars[i]);
+			}
+		}
+		return fieldsList;
+	}
+	
+	/**
+	 * This method takes a {@link String} containing words separated by whitespace and returns an identical {@link String}
+	 * where the words are separated by exactly one space.
+	 * 
+	 * @param input
+	 * 	The input {@link String}
+	 * @return
+	 * 	The output {@link String}
+	 */
+	public static String homogeniseWhiteSpace(String input) {
+		
+		// Trim any leading/trailing whitespace
+		input = input.trim();
+		
+		// Split the string on any amount of white space
+		String[] words = input.split("\\s+");
+		
+		if(words.length == 0) {
+			return "";
+		}
+		
+		// Put the words back together separated by single spaces
+		StringBuilder output = new StringBuilder();
+		output.append(words[0]);
+		for(int i=1; i<words.length; i++) {
+			String word = words[i];
+			output.append(" ");
+			output.append(word);
+		}
+			
+		return output.toString();
+	}
+	
+	/**
+	 * This method takes a {@link String} and converts any variant of 'PLC' to 'PLC'.
+	 * 
+	 * @param input
+	 * 	The input {@link String}
+	 * @return
+	 * 	The output {@link String}
+	 */
+	public static String homogenisePlc(String input) {
+		
+		// P.L.C. -> PLC
+		input = input.replace("P.L.C.", "PLC");
+		
+		// P. L. C. -> PLC
+		input = input.replace("P. L. C.", "PLC");
+		
+		// P L C -> PLC
+		input = input.replace("P L C", "PLC");
+		
+		// PLC. -> PLC
+		input = input.replace("PLC.", "PLC");
+		
+		// PUBLIC LIMITED COMPANY -> PLC
+		input = input.replace("PUBLIC LIMITED COMPANY", "PLC");
+		
+		return input;
+	}
+
+	/**
+	 * This method takes a {@link String} and converts any occurences of '&' to 'AND'.
+	 * 
+	 * @param input
+	 * 	The input {@link String}
+	 * @return
+	 * 	The output {@link String}
+	 */
+	public static String homogeniseAnd(String input) {
+		
+		input = input.replace("&", "AND");
+		
+		return input;
+	}
+	
+	/**
+	 * This method takes a {@link String} and removes any occurence of '(THE)' within the
+	 * string and 'THE' at the start  of the string.
+	 * 
+	 * @param input
+	 * 	The input {@link String}
+	 * @return
+	 * 	The output {@link String}
+	 */
+	public static String homogeniseThe(String input) {
+		
+		input = input.replace("(THE)", "");
+		// Close any excess whitespace left by removing (THE)
+		input = homogeniseWhiteSpace(input);
+		
+		if (input.startsWith("THE ")) {
+		    input = input.replaceFirst("THE ", "");
+		}
+		
+		return input;
+	}
+	
+	/**
+	 * Looks for something contained in brackets in the string and moves it to the front.
+	 * @param input
+	 * @return
+	 */
+	public static String homogeniseParentheses(String input) {
+		
+		if(input.contains("(")) {
+			// Identify the brackets and enclosed text
+			String bracketsAndText = input.substring(input.indexOf("("),input.indexOf(")")+1);
+			
+			// Remove the brackets and enclosed text from the middle of the string
+			input = input.replace(bracketsAndText, "");
+			
+			// Strip the brackets from the text
+			String text = bracketsAndText.substring(1, bracketsAndText.length() - 1);
+			
+			// Insert the text at the start
+			input = text + " " + input;
+			
+			input = homogeniseWhiteSpace(input);
+		}
+	    
+		return input;
+	}
+	
+	/**
+	 * Parses a {@link CompanyDbSnapshot} from a record in the Companies House database snapshot.
+	 * 
+	 * @param txt
+	 * 	The String to parse.
+	 * @return
+	 * 	A {@link CompanyDbSnapshot} parsed from the text String.
+	 */
+	public static CompanyDbSnapshot parseCompany(String txt) {
+		
+		List<String> fieldsList = tokenizeWithQuotes(txt, ',');
 		
 		if(fieldsList.size() != 55) {
 			System.out.println("Parsed "+fieldsList.size() + " fields from " + txt);
@@ -506,4 +678,48 @@ public class ParseUtil {
 		return company;
 	}
 	
+	/**
+	 * Reads the given file and parses company numbers from the first column in each line. Logs warnings
+	 * if any company number appears more than once.
+	 * 
+	 * @param input
+	 * 	The {@link File} to load.
+	 * @return
+	 * 	A {@link List} of {@link String}s containing company numbers loaded from the first
+	 * column of each line in the input file.
+	 */
+	public static List<String> parseCompanyNumbers(File input) {
+		
+		List<String> companyNumbers = new LinkedList<>();
+		
+		try(BufferedReader in = new BufferedReader(new FileReader(input))) {
+			String line;
+			while((line = in.readLine()) != null) {
+				// Company number is in the first token
+				Scanner scan = new Scanner(line);
+				companyNumbers.add(scan.next());
+				scan.close();
+			}
+		}
+		catch(IOException e) {
+			logger.severe("Exception while reading the file " + input.getName() + ": " + e.getLocalizedMessage());
+		}
+		
+		// Check for duplicate company numbers
+		Map<String, int[]> map = new HashMap<>();
+		for(String companyNumber : companyNumbers) {
+			if(!map.containsKey(companyNumber)) {
+				map.put(companyNumber, new int[] {0});
+			}
+			map.get(companyNumber)[0]++;
+		}
+		
+		for(Entry<String, int[]> entry : map.entrySet()) {
+			if(entry.getValue()[0] > 1) {
+				logger.warning("Company number " + entry.getKey() + " appears " + entry.getValue()[0] + " times in file " + input.getName());
+			}
+		}
+		
+		return companyNumbers;
+	}
 }

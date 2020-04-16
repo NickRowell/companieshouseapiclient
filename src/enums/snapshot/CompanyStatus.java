@@ -7,29 +7,17 @@ public enum CompanyStatus {
 	active("Active"),
 	activeProposalToStrikeOff("Active - Proposal to Strike off"),
 	liquidation("Liquidation"),
-	
-	// Bunch of values that look very similar:
 	administration("In Administration"),
 	administrationOrder("ADMINISTRATION ORDER"),
 	administrativeReceiver("ADMINISTRATIVE RECEIVER"),
 	receiverManagerAdminReceiver("RECEIVER MANAGER / ADMINISTRATIVE RECEIVER"),
 	administrationAdminReceiver("In Administration/Administrative Receiver"),
 	administrationReceiverManager("In Administration/Receiver Manager"),
-	
 	voluntaryArrangement("Voluntary Arrangement"),
 	voluntaryArrangementAdminReceiver("VOLUNTARY ARRANGEMENT / ADMINISTRATIVE RECEIVER"),
 	voluntaryArrangementReceiverManager("VOLUNTARY ARRANGEMENT / RECEIVER MANAGER"),
-	
 	receivership("RECEIVERSHIP"),
 	receivershipRmAtLeastOneCharge("Live but Receiver Manager on at least one charge"),
-	
-	// Values present in the Companies House API but not the database snapshot:
-//	dissolved("Dissolved"),
-//	receivership("Receiver Action"),
-//	convertedClosed("Converted / Closed"),
-//	insolvencyProceedings("Insolvency Proceedings"),
-//	open("Open"),
-//	closed("Closed"),
 	;
 
 	CompanyStatus(String ... descriptions) {

@@ -80,7 +80,7 @@ public class Appointment implements Serializable {
 	 */
 	public OfficerRole officer_role;
 	/**
-	 * The appointment address, i.e. of the company.
+	 * The address of the officer at the time of the appointment (NOT the company address).
 	 */
 	public Address address;
 	/**

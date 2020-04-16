@@ -6,12 +6,18 @@ import java.io.InputStreamReader;
 import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.binary.StringUtils;
@@ -25,13 +31,31 @@ import com.google.gson.JsonParseException;
 
 import dm.Appointments;
 import dm.Company;
+import dm.CompanyOfficer;
 import dm.CompanyOfficers;
+import dm.CompanySearch;
+import dm.CompanySearch.CompanySearchCompany;
+import enums.api.CompanyStatus;
 
 @SuppressWarnings("deprecation")
 public class QueryUtil {
 
 	public static final Map<Integer, String> httpUrlConnectionResponseMap = new TreeMap<>();
 	
+	/**
+	 * {@link Set} of HTTP URL connection response codes that indicate we should retry the connection.
+	 */
+	public static final Set<Integer> responseCodesIndicatingRepeat = new TreeSet<>();
+	
+	/**
+	 * Counts the number of successful connections made to the Companies House API during the
+	 * execution of the JVM.
+	 */
+	private static long connections = 0;
+	
+	/**
+	 * Integer code indicating the Companies House API query limit has been reached.
+	 */
 	public static final int HTTP_RATE_THROTTLING = 429;
 	
 	static {
@@ -72,23 +96,45 @@ public class QueryUtil {
 		httpUrlConnectionResponseMap.put(HttpURLConnection.HTTP_USE_PROXY, "HTTP_USE_PROXY");
 		httpUrlConnectionResponseMap.put(HttpURLConnection.HTTP_VERSION, "HTTP_VERSION");
 		httpUrlConnectionResponseMap.put(HTTP_RATE_THROTTLING, "HTTP_COMPANIES_HOUSE_API_RATE_THROTTLING");
+		
+		// Add a shutdown hook to report the number of connections made during the execution.
+		Thread printingHook = new Thread(() -> System.out.println("Connections made: " + connections));
+		Runtime.getRuntime().addShutdownHook(printingHook);
+		
+		responseCodesIndicatingRepeat.addAll(
+			Arrays.asList(HttpURLConnection.HTTP_BAD_GATEWAY, HttpURLConnection.HTTP_GATEWAY_TIMEOUT));
 	}
+	
+	/**
+	 * Maximum number of connection attempts before aborting.
+	 */
+	private final static int maxAttempts = 5;
 	
 	/**
 	 * API key for this application
 	 */
-	private static String apiKey = "unzngwpKvT8FOSSJJkyuNP7SsJo6v8f4w4FciVy2";
-	
-	/**
-	 * URL for the company search, with a placeholder and format specifier for the company number
-	 */
-	private static String companyUrl = "https://api.companieshouse.gov.uk/company/%s";
-	
+	private final static String apiKey = "unzngwpKvT8FOSSJJkyuNP7SsJo6v8f4w4FciVy2";
+
 	/**
 	 * Base URL for the companies house searches, with a placeholder for any extensions
 	 */
-	private static String baseUrl = "https://api.companieshouse.gov.uk%s";
-
+	private final static String baseUrl = "https://api.companieshouse.gov.uk%s";
+	 
+	/**
+	 * URL for the company search, with a placeholder and format specifier for the company number
+	 */
+	private final static String companyUrl = String.format(baseUrl, "/company/%s");
+	
+	/**
+	 * URL for the company officers search, with a placeholder and format specifier for the company number
+	 */
+	private final static String companyOfficersUrl = String.format(baseUrl, "/company/%s/officers");
+	
+	/**
+	 * URL for company search facility.
+	 */
+	private final static String companySearchUrl = String.format(baseUrl, "/search/companies?q=%s");
+	
 	/**
 	 * Instance of {@link Gson} used to parse Java Objects from JSON format. We write our own implementation
 	 * below in order to handle empty date strings.
@@ -115,24 +161,28 @@ public class QueryUtil {
 	}
 	
 	/**
-	 * Queries the Companies House database via the API for the {@link Company} with the
-	 * given number.
+	 * Queries the Companies House database via the API for the {@link Company} resource at the following location:
+	 * 
+	 * "https://api.companieshouse.gov.uk/company/{company_number}"
 	 * 
 	 * @param companyNumber
 	 * 	The number of the {@link Company} to look up.
+	 * @param httpUrlConnectionResponseCode
+	 * 	A one-element int array; on exit this contains the HTTP URL response code. This can give diagnostic information
+	 * in case the returned object is null.
 	 * @return
 	 * 	The {@link Company} with the given number, or null if this doesn't exist.
 	 * @throws IOException
 	 * 	If there's a problem connecting with the Companies House database.
 	 * @throws InterruptedException 
 	 */
-	public static Company getCompany(String companyNumber) throws IOException, InterruptedException {
+	public static Company getCompany(String companyNumber, int[] httpUrlConnectionResponseCode) throws IOException, InterruptedException {
 		
 		// Create connection
 		URL url = new URL(String.format(companyUrl, companyNumber));
 		
 		// Get the contents of the URL
-		String contents = get(url);
+		String contents = get(url, httpUrlConnectionResponseCode);
 		
 		if(contents == null) {
 			return null;
@@ -154,25 +204,130 @@ public class QueryUtil {
 	}
 	
 	/**
-	 * Queries the Companies House database via the API for the {@link CompanyOfficers} with the
-	 * given link.
+	 * Performs a search using the Companies House API to look for a company with the given name. Although some
+	 * homogenisation of the company names is performed (e.g. to match "COMPANY (THE)" and "THE COMPANY"), the
+	 * search may still return more than one company if the name is ambiguous. In these cases the user should
+	 * manually check the results to decide which company is the correct match.
 	 * 
-	 * @param officersLink
-	 * 	The link to the officers resource. This is doesn't include the base URL and is what is contained in the
-	 * {@link Company.Links#officers} string, e.g. "/company/11432768/officers"
+	 * @param companyName
+	 * 	The name of the company to search for.
+	 * @param httpUrlConnectionResponseCode
+	 * 	A one-element int array; on exit this contains the HTTP URL response code. This can give diagnostic information
+	 * in case the returned object is null.
+	 * @return
+	 * 	A {@link List} of zero, one or more companies that have been matched to the given name, stored as 
+	 * {@link CompanySearchCompany} types to encapsulate the fields returned by the Companies House API.
+	 * @throws IOException
+	 * 	If there's a problem forming the URL or performing the query.
+	 * @throws InterruptedException
+	 * 	If there's a problem performing the query.
+	 */
+	public static List<CompanySearchCompany> getActiveCompanyByName(String companyName, int[] httpUrlConnectionResponseCode) throws IOException, InterruptedException {
+		
+		// Homogenise the whitespace in the company name string
+		companyName = ParseUtil.homogeniseWhiteSpace(companyName);
+
+		// Homogenise variants of 'PLC' in the company name string
+		companyName = ParseUtil.homogenisePlc(companyName);
+
+		// Convert '&' to 'AND'
+		companyName = ParseUtil.homogeniseAnd(companyName);
+
+		// Remove 'THE' from the start of the name, remove '(THE)' from within the name
+		companyName = ParseUtil.homogeniseThe(companyName);
+		
+		// Move the first substring in parentheses to the start
+		companyName = ParseUtil.homogeniseParentheses(companyName);
+		
+		// Create connection
+		URL url = new URL(String.format(companySearchUrl, URLEncoder.encode(companyName)));
+		
+		// Get the contents of the URL
+		String contents = get(url, httpUrlConnectionResponseCode);
+		
+		if(contents == null) {
+			System.out.println("Received null from " + companyName);
+			return null;
+		}
+		
+		// Parse from a JSON to a Java object
+		CompanySearch companySearch = null;
+		try {
+			companySearch = gson.fromJson(contents, CompanySearch.class);
+		}
+		catch(com.google.gson.JsonSyntaxException e) {
+			System.out.println("Error: " + e.getLocalizedMessage());
+			e.printStackTrace();
+			System.out.println("Problem parsing this company string:");
+			System.out.println(contents);
+		}
+		
+		// Contains companies for which the homogenised names are exact matches. There may be more than
+		// one, which may indicate that the name homogenisation has removed an important feature, or that
+		// some rare situation has been encountered with more than one active company having the same name.
+		List<CompanySearchCompany> matchingCompanies = new LinkedList<>();
+		
+		// Examine the matches and find the one with the same name
+		for(CompanySearchCompany company : companySearch.items) {
+			
+			// Skip dissolved companies
+			if(company.company_status == null || company.company_status.equals(CompanyStatus.dissolved)) {
+				continue;
+			}
+
+			// Homogenise whitespace in API company name
+			String title = ParseUtil.homogeniseWhiteSpace(company.title);
+
+			// Homogenise variants of 'PLC' in the company name string
+			title = ParseUtil.homogenisePlc(title);
+
+			// Convert '&' to 'AND'
+			title = ParseUtil.homogeniseAnd(title);
+
+			// Remove 'THE' from the start of the name, remove '(THE)' from within the name
+			title = ParseUtil.homogeniseThe(title);
+
+			// Move the first substring in parentheses to the start
+			title = ParseUtil.homogeniseParentheses(title);
+			
+			if(companyName.equalsIgnoreCase(title)) {
+				matchingCompanies.add(company);
+			}
+		}
+		
+		if(!matchingCompanies.isEmpty()) {
+			return matchingCompanies;
+		}
+		else {
+			// If we didn't find exact matches then return everything
+			return Arrays.asList(companySearch.items);
+		}
+	}
+	
+	/**
+	 * Queries the Companies House database via the API for the {@link CompanyOfficers} resource at the
+	 * following location:
+	 * 
+	 * "https://api.companieshouse.gov.uk/company/{company_number}/officers"
+	 * 
+	 * @param companyNumber
+	 * 	The number of the {@link Company} to look up.
+	 * @param httpUrlConnectionResponseCode
+	 * 	A one-element int array; on exit this contains the HTTP URL response code. This can give diagnostic information
+	 * in case the returned object is null.
 	 * @return
 	 * 	A {@link CompanyOfficers} encapsulating the results of the query.
 	 * @throws IOException
 	 * 	If there's a problem connecting with the Companies House database.
 	 * @throws InterruptedException 
 	 */
-	public static CompanyOfficers getCompanyOfficers(String officersLink) throws IOException, InterruptedException {
+	public static CompanyOfficers getCompanyOfficers(String companyNumber, int[] httpUrlConnectionResponseCode) throws IOException, InterruptedException {
 		
 		// Create connection
-		URL url = new URL(String.format(baseUrl, officersLink));
+		URL url = new URL(String.format(companyOfficersUrl, companyNumber));
 		
 		// Get the contents of the URL
-		String contents = get(url);
+		String contents = get(url, httpUrlConnectionResponseCode);
 		
 		if(contents == null) {
 			return null;
@@ -194,25 +349,29 @@ public class QueryUtil {
 	}
 	
 	/**
-	 * Queries the Companies House database via the API for the {@link Appointments} with the
-	 * given link.
+	 * Queries the Companies House database via the API for the {@link Appointments} resource at the following location:
+	 * 
+	 * "https://api.companieshouse.gov.uk/officers/{officer_id}/appointments"
 	 * 
 	 * @param appointmentsLink
 	 * 	The link to the officer appointments resource. This is doesn't include the base URL and is what is contained in the
-	 * {@link Company.Links#officers} string, e.g. 
+	 * {@link Company.Links#officers} string, e.g. "/officers/SfT6idy3dA8q_pUOe_qfgUqKc_Y/appointments"
+	 * @param httpUrlConnectionResponseCode
+	 * 	A one-element int array; on exit this contains the HTTP URL response code. This can give diagnostic information
+	 * in case the returned object is null.
 	 * @return
 	 * 	A {@link Appointments} encapsulating the results of the query.
 	 * @throws IOException
 	 * 	If there's a problem connecting with the Companies House database.
 	 * @throws InterruptedException 
 	 */
-	public static Appointments getAppointments(String appointmentsLink) throws IOException, InterruptedException {
+	public static Appointments getAppointments(String appointmentsLink, int[] httpUrlConnectionResponseCode) throws IOException, InterruptedException {
 		
 		// Create URL
 		URL url = new URL(String.format(baseUrl, appointmentsLink));
 		
 		// Get the contents of the URL
-		String contents = get(url);
+		String contents = get(url, httpUrlConnectionResponseCode);
 		
 		if(contents == null) {
 			return null;
@@ -238,22 +397,27 @@ public class QueryUtil {
 	 * 
 	 * @param url
 	 * 	The {@link URL}.
+	 * @param httpUrlConnectionResponseCode
+	 * 	A one-element int array; on exit this contains the HTTP URL response code. This can give diagnostic information
+	 * in case the returned object is null.
 	 * @return
 	 * 	A {@link String} containing the results of the query.
 	 * @throws IOException
 	 * 	If there's a problem reading the contents from the {@link HttpURLConnection}.
 	 * @throws InterruptedException 
 	 */
-	private static String get(URL url) throws IOException, InterruptedException {
+	private static String get(URL url, int[] httpUrlConnectionResponseCode) throws IOException, InterruptedException {
 		
 		String encoded = new String(Base64.encodeBase64(StringUtils.getBytesUtf8(apiKey+":")));
 		
-		// To deal with rate throttling, we loop the connection until we get a response code
-		// that is not HTTP_RATE_THROTTLING
+		int attempts = 0;
+		
 		HttpURLConnection connection = null;
-		int httpUrlConnectionResponseCode;
+		boolean repeat;
 		
 		do {
+			
+			repeat = false;
 			
 			connection = (HttpURLConnection) url.openConnection();
 			connection.setRequestMethod("GET");
@@ -261,18 +425,31 @@ public class QueryUtil {
 			connection.setRequestProperty("Content-Type", "application/json");
 		
 			// Send request
-			httpUrlConnectionResponseCode = connection.getResponseCode();
+			httpUrlConnectionResponseCode[0] = connection.getResponseCode();
 			
-			if(httpUrlConnectionResponseCode == QueryUtil.HTTP_RATE_THROTTLING) {
-				// Exceeded the limit for the number of queries - pause for 5 mins
-				System.out.println("Exceeded query limit, pausing for 5 mins...");
-				Thread.sleep(5 * 60 * 1000);
+			if(httpUrlConnectionResponseCode[0] == QueryUtil.HTTP_RATE_THROTTLING) {
+				// Exceeded the limit for the number of queries - pause for 5 mins then resume
+				System.out.println("Exceeded query limit, pausing for 1 min...");
+				Thread.sleep(1 * 60 * 1000);
 				System.out.println("Resuming");
+				repeat = true;
 			}
+			else if(responseCodesIndicatingRepeat.contains(httpUrlConnectionResponseCode[0])) {
+				System.out.println("Received response code " + QueryUtil.httpUrlConnectionResponseMap.get(httpUrlConnectionResponseCode[0])
+				+ " from URL " + url + "; retrying in 5 seconds...");
+				Thread.sleep(5 * 1000);
+				System.out.println("Resuming");
+				repeat = true;
+			}
+			
+			attempts++;
 		}
-		while(httpUrlConnectionResponseCode == QueryUtil.HTTP_RATE_THROTTLING);
+		while(repeat && attempts < maxAttempts);
 
-		if(httpUrlConnectionResponseCode == HttpURLConnection.HTTP_OK) {
+		if(httpUrlConnectionResponseCode[0] == HttpURLConnection.HTTP_OK) {
+			
+			connections++;
+			
 			// Get response
 			BufferedReader rd = new BufferedReader(new InputStreamReader(connection.getInputStream()));
 			StringBuilder response = new StringBuilder();
@@ -286,9 +463,42 @@ public class QueryUtil {
 		}
 		else {
 			System.out.println(String.format("%s\t%s\t%d", url, 
-					QueryUtil.httpUrlConnectionResponseMap.get(httpUrlConnectionResponseCode), httpUrlConnectionResponseCode));
+					QueryUtil.httpUrlConnectionResponseMap.get(httpUrlConnectionResponseCode[0]), httpUrlConnectionResponseCode[0]));
 			return null;
 		}
 	}
 	
+	/**
+	 * Main method to allow testing of the methods in this class.
+	 * 
+	 * @param args
+	 * 	The command line args (ignored).
+	 * @throws InterruptedException 
+	 * @throws IOException 
+	 */
+	public static void main(String[] args) throws IOException, InterruptedException {
+		
+		String companyNumber = "02396957";
+		
+		int[] httpUrlResponseCode = new int[1];
+		
+		CompanyOfficers officers = QueryUtil.getCompanyOfficers(companyNumber, httpUrlResponseCode);
+		
+//		System.out.println(String.format("Response code: %s\t%d", QueryUtil.httpUrlConnectionResponseMap.get(httpUrlResponseCode[0]), httpUrlResponseCode[0]));
+		
+		System.out.println("Company number = " + companyNumber);
+		System.out.println("Officers = " + officers.items.length);
+		
+		for(CompanyOfficer officer : officers.items) {
+			
+			// Get officer's DoB from the appointments link
+			Appointments appts = getAppointments(officer.links.officer.appointments, httpUrlResponseCode);
+			
+			System.out.println(officer.name + "\t" + officer.date_of_birth + "\t" + appts.date_of_birth);
+			
+			System.out.println(officer.name + "\t" + officer.address.postal_code + "\t" + appts.items[0].address.postal_code);
+			
+			
+		}
+	}
 }

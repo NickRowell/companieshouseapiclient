@@ -2,8 +2,11 @@ package enums.snapshot;
 
 import java.util.Arrays;
 
-import com.google.gson.annotations.SerializedName;
-
+/**
+ * Enumerates the different company types recorded in the Companies House database snapshot.
+ * 
+ * @author nrowell
+ */
 public enum CompanyType {
 
 	ltd("Private Limited Company"),
@@ -25,59 +28,45 @@ public enum CompanyType {
 	icvcSecurities("Investment Company with Variable Capital (Securities)"),
 	privateLimitedSharesSection30Exemption("Private Limited Company, use of 'Limited' exemption","PRIV LTD SECT. 30 (Private limited company, section 30 of the Companies Act)"),
 	europeanPublicLimitedLiabilityCompanySe("European public limited liability company (SE)", "European Public Limited-Liability Company (SE)"),
-
-	
-//	@SerializedName("converted-or-closed")
-//	convertedOrClosed("Converted / closed"),
-	
-//	@SerializedName("private-unlimited-nsc")
-//	privateUnlimitedNsc("Private unlimited company without share capital"),
-	
-//	@SerializedName("protected-cell-company")
-//	protectedCellCompany("Protected cell company"),
-	
-//	@SerializedName("assurance-company")
-//	assuranceCompany("Assurance company"),
-	
-//	@SerializedName("oversea-company")
-//	overseaCompany("Overseas company"),
-	
-//	@SerializedName("eeig")
-//	eeig("European economic interest grouping (EEIG)"),
-	
-//	@SerializedName("icvc-securities")
-//	icvcSecurities("Investment company with variable capital"),
-	
-	
-//	@SerializedName("northern-ireland")
-//	northernIreland("Northern Ireland company"),
-	
-//	@SerializedName("northern-ireland-other")
-//	northernIrelandOther("Credit union (Northern Ireland)"),
-	
-
-//	@SerializedName("unregistered-company")
-//	unregisteredCompany("Unregistered company"),
-	
-
-//	@SerializedName("uk-establishment")
-//	ukEstablishment("UK establishment company"),
-	
-//	@SerializedName("scottish-partnership")
-//	scottishPartnership("Scottish qualifying partnership"),
-	
+	cio("Charitable Incorporated Organisation"),
+	scio("Scottish Charitable Incorporated Organisation"),
+	sp("Scottish Partnership"),
+	pcp("Protected Cell Company"),
+	feasfcc("Further Education and Sixth Form College Corps"),
 	;
 
+	/**
+	 * Main constructor.
+	 * 
+	 * @param descriptions
+	 * 	One or more {@link String}s containing the textual representation of the company type. Some types are duplicated
+	 * with similar strings of text.
+	 */
 	CompanyType(String ... descriptions) {
 		this.descriptions = descriptions;
 	}
 
+	/**
+	 * Array of {@link String}s that contain the textual representation of the company type. These are used to map to the
+	 * enum type.
+	 */
 	private String[] descriptions;
 	
+	/**
+	 * {@inheritDoc}
+	 */
 	public String toString() {
 		return Arrays.toString(descriptions);
 	}
 	
+	/**
+	 * Determines if the enum corresponds to the description given.
+	 * 
+	 * @param description
+	 * 	The textual description of the company type.
+	 * @return
+	 * 	Boolean flag indicating if the given {@link String} corresponds to the current enum (true) or not (false).
+	 */
 	public boolean describes(String description) {
 		for(String test : descriptions) {
 			if(test.equalsIgnoreCase(description)) {
@@ -89,6 +78,7 @@ public enum CompanyType {
 	
 	/**
 	 * Parses a {@link CompanyType} from a string.
+	 * 
 	 * @param typeString
 	 * 	The type of the company in string representation.
 	 * @return

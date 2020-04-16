@@ -52,8 +52,9 @@ public class SlurpAllCompanyData {
 		int counter = 0;
 		
 		for(int c=startingCompanyNumber; c < 10000000; ) {
-			
-			Company company = QueryUtil.getCompany(String.format("%08d", c));
+
+			int[] httpUrlResponseCode = new int[1];
+			Company company = QueryUtil.getCompany(String.format("%08d", c), httpUrlResponseCode);
 			
 			if(company != null) {
 			

@@ -77,7 +77,8 @@ public class CompanyQueryPanel extends JPanel {
 				Company company = null;
 				try {
 					setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-					company = QueryUtil.getCompany(companyNumber);
+					int[] httpUrlResponseCode = new int[1];
+					company = QueryUtil.getCompany(companyNumber, httpUrlResponseCode);
 				} catch (IOException e1) {
 					JOptionPane.showMessageDialog(parent, String.format("Received following response from query: %s", 
 							e1.getMessage()), 

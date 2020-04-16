@@ -1,17 +1,9 @@
 package exec;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Queue;
-import java.util.Set;
-import java.util.concurrent.LinkedBlockingQueue;
 
 import dm.Appointment;
 import dm.Appointments;
-import dm.Company;
-import dm.CompanyOfficer;
-import dm.CompanyOfficers;
 import util.QueryUtil;
 
 /**
@@ -40,9 +32,10 @@ public class ExamineDuplicateOfficers {
 
 		// name = OLIVER, Nicholas Martin
 		// appointments = /officers/phPP03Op67kehiZ5vEWvXW2UuYQ/appointments
-		
-		Appointments appointments1 = QueryUtil.getAppointments("/officers/rZT_8vqfiJtA1yGnonKZUD09CN0/appointments");
-		Appointments appointments2 = QueryUtil.getAppointments("/officers/phPP03Op67kehiZ5vEWvXW2UuYQ/appointments");
+
+		int[] httpUrlResponseCode = new int[1];
+		Appointments appointments1 = QueryUtil.getAppointments("/officers/rZT_8vqfiJtA1yGnonKZUD09CN0/appointments", httpUrlResponseCode);
+		Appointments appointments2 = QueryUtil.getAppointments("/officers/phPP03Op67kehiZ5vEWvXW2UuYQ/appointments", httpUrlResponseCode);
 		
 		System.out.println("etag 1 = " + appointments1.etag);		
 		System.out.println("etag 2 = " + appointments2.etag);
