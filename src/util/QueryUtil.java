@@ -4,9 +4,11 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.reflect.Type;
+import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.net.UnknownHostException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -424,8 +426,23 @@ public class QueryUtil {
 			connection.setRequestProperty ("Authorization", "Basic " + encoded);
 			connection.setRequestProperty("Content-Type", "application/json");
 		
-			// Send request
-			httpUrlConnectionResponseCode[0] = connection.getResponseCode();
+			// Send request; watch out for brief network outages
+			try {
+				httpUrlConnectionResponseCode[0] = connection.getResponseCode();
+			}
+			catch(UnknownHostException e) {
+				System.out.println("Caught UnknownHostException, pausing for 1 min then retrying...");
+				Thread.sleep(1 * 60 * 1000);
+				System.out.println("Resuming");
+				repeat = true;
+			}
+			catch(ConnectException e) {
+				// End up here on "Connection timed out (Connection timed out)"
+				System.out.println("Caught ConnectException, pausing for 5 min then retrying...");
+				Thread.sleep(5 * 60 * 1000);
+				System.out.println("Resuming");
+				repeat = true;
+			}
 			
 			if(httpUrlConnectionResponseCode[0] == QueryUtil.HTTP_RATE_THROTTLING) {
 				// Exceeded the limit for the number of queries - pause for 5 mins then resume

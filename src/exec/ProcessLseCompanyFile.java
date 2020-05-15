@@ -15,6 +15,9 @@ import util.ParseUtil;
 import util.QueryUtil;
 
 /**
+ * Application to process the 'Company List' file from:
+ * https://www.londonstockexchange.com/statistics/companies-and-issuers/companies-and-issuers.htm
+ *
  *
  * @author nrowell
  * @version $Id$
@@ -37,7 +40,7 @@ public class ProcessLseCompanyFile {
 	public static void main(String[] args) throws IOException, InterruptedException {
 		
 		// Path to file containing the company names
-		File input = new File("/home/nrowell/Projects/CompaniesHouseStatsAnalysis/LondonStockExchange/companies-defined-by-mifir-identifiers-list-on-lse.csv");
+		File input = new File("/home/nrowell/Projects/CompaniesHouseStatsAnalysis/LondonStockExchange/2020.05.04/companies-defined-by-mifir-identifiers-list-on-lse.csv");
 		
 		// Number of header and tail lines in input file
 		int nHead = 6;
@@ -124,6 +127,7 @@ public class ProcessLseCompanyFile {
 				CompanySearchCompany company = matches.get(0);
 				String apiCompanyName = company.title;
 				outUnamb.write(company.company_number + "\t\"" + apiCompanyName + "\"\t-->\t\"" + lseCompanyName + "\"\t" + company.company_status + "\n");
+				outUnamb.flush();
 				unambiguous++;
 			}
 			else if (matches.size() > 1) {
@@ -137,11 +141,13 @@ public class ProcessLseCompanyFile {
 					outAmb.write(company.company_number + "\t\"" + apiCompanyName + "\"\t-->\t\"" + lseCompanyName + "\"\t" + company.company_status + "\n");
 				}
 				outAmb.write("\n\n");
+				outAmb.flush();
 				ambiguous++;
 			}
 			else {
 				// No matches - manual search
 				outAmb.write("\""+lseCompanyName+"\"\nNo matches\n\n\n");
+				outAmb.flush();
 				missing++;
 			}
 		}

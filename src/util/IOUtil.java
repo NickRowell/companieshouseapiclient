@@ -16,7 +16,6 @@ import org.jgrapht.graph.Multigraph;
  * Class providing various IO utilities.
  * 
  * @author nrowell
- *
  */
 public final class IOUtil {
 
@@ -31,22 +30,48 @@ public final class IOUtil {
 	private IOUtil() {}
 	
 	/**
-	 * Serialise the {@link Object} to a {@link File}.
+	 * Serialise the {@link Object} to the {@link File}.
 	 * 
 	 * @param outputFile
-	 * 	The {@link File} to save the {@link Graph} to.
+	 * 	The {@link File} to save the {@link Object} to.
 	 * @param object
 	 * 	The {@link Object} to be serialized.
 	 */
 	public static void serialize(File outputFile, Object object) {
 
-		// Write the accumulated {@link Window}s to file
-		try (FileOutputStream file = new FileOutputStream(outputFile);
-			 ObjectOutputStream output = new ObjectOutputStream(file);) {
+		try (ObjectOutputStream output = new ObjectOutputStream(new FileOutputStream(outputFile))) {
 			output.writeObject(object);
 	    }  
 	    catch(IOException ex){
 	    	logger.log(Level.SEVERE, "IOException serializing object to file " + outputFile.getName(), ex);
+	    }
+	}
+	
+	/**
+	 * Deerialise the {@link Object} from the {@link File} and cast it.
+	 * 
+	 * @param outputFile
+	 * 	The {@link File} to save the {@link Graph} to.
+	 * @param clazz
+	 * 	The generic class type of the object to be deserialised.
+	 * @return
+	 * 	The instance read from the {@link File}.
+	 */
+	public static <T> T deserialize(File outputFile, Class<T> clazz) {
+
+		Object output = null;
+		
+		try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(outputFile))) {
+			output = in.readObject();
+		} catch (IOException | ClassNotFoundException e) {
+			logger.log(Level.SEVERE, "Exception deserializing object from file " + outputFile.getName(), e);
+		}
+		
+		try {
+	        return (T)clazz.cast(output);
+	    } catch(ClassCastException e) {
+	    	throw new RuntimeException("Can't cast contents of " + outputFile.getAbsolutePath() + 
+	    			" to type " + clazz.getCanonicalName());
 	    }
 	}
 	

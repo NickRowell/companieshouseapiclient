@@ -27,7 +27,7 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import dm.CompanyOfficer;
+import dm.CompanyOfficerLite;
 import enums.api.OfficerRole;
 
 /**
@@ -210,13 +210,13 @@ public class CompaniesHouseUtil {
 	 *        - Missing DoB information -> Ambiguous.
 	 * 
 	 * @param o1
-	 * 	The first {@link CompanyOfficer}.
+	 * 	The first {@link CompanyOfficerLite}.
 	 * @param o2
-	 * 	The second {@link CompanyOfficer}.
+	 * 	The second {@link CompanyOfficerLite}.
 	 * @return
 	 * An {@link OFFICER_EQUALITY_TEST_OUTCOME}.
 	 */
-	public static OFFICER_EQUALITY_TEST_OUTCOME compareOfficers(CompanyOfficer o1, CompanyOfficer o2) {
+	public static OFFICER_EQUALITY_TEST_OUTCOME compareOfficers(CompanyOfficerLite o1, CompanyOfficerLite o2) {
 
 		String appt1 = o1.links.officer.appointments;
 		String appt2 = o2.links.officer.appointments;
@@ -242,7 +242,8 @@ public class CompaniesHouseUtil {
         		System.out.println("Different appointments: " + appt1 + "\t" + appt2);
         		System.out.println("Same name: " + name1 + " \\ " + name2);
         		System.out.println("Insufficient DoB info: " + o1.date_of_birth + "\t" + o2.date_of_birth);
-        		System.out.println("Postcodes: " + o1.address.postal_code + "\t" + o2.address.postal_code);
+        		// Postcode is not available in CompanyOfficerLite - could deserialise the file to get this info
+//        		System.out.println("Postcodes: " + o1.address.postal_code + "\t" + o2.address.postal_code);
 
         		return OFFICER_EQUALITY_TEST_OUTCOME.AMBIGUOUS;
         	}

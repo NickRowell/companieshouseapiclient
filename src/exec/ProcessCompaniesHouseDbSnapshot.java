@@ -39,7 +39,7 @@ public class ProcessCompaniesHouseDbSnapshot {
 	/**
 	 * Path to the file containing the database snapshot.
 	 */
-	private static final File dbSnaphotPath = new File("/home/nrowell/Projects/CompaniesHouseStatsAnalysis/FreeDataProduct/BasicCompanyDataAsOneFile-2020-03-01.csv");
+	private static final File dbSnaphotPath = new File("/home/nrowell/Projects/CompaniesHouseStatsAnalysis/FreeDataProduct/2020.05.01/BasicCompanyDataAsOneFile-2020-05-01.csv");
 	
 	/**
 	 * Path to the directory to store the outputs.

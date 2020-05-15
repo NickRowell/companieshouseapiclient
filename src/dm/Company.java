@@ -19,7 +19,7 @@ import enums.api.TermsOfAccountPublication;
  * @author nrowell
  * @version $Id$
  */
-public class Company implements Serializable, Vertex {
+public class Company implements Serializable {
 	/**
 	 * The serialVersionUID.
 	 */

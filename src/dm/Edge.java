@@ -5,9 +5,9 @@ import org.jgrapht.graph.DefaultEdge;
 import enums.api.OfficerRole;
 
 /**
- * Ths class represents on edge in the company/officer graph. Edges link one {@link Company} with one {@link CompanyOfficer},
+ * Ths class represents on edge in the company/officer graph. Edges link one {@link CompanyLite} with one {@link CompanyOfficer},
  * and have the attribute {@link OfficerRole}. The {@link #equals(Object)} and {@link #hashCode()} methods
- * are overridden in order to make two {@link Edge}s that connect the same {@link Company} and {@link CompanyOfficer} with
+ * are overridden in order to make two {@link Edge}s that connect the same {@link CompanyLite} and {@link CompanyOfficer} with
  * the same {@link OfficerRole} identical. This is useful for establishing the equality of {@link org.jgrapht.Graph}s.
  * 
  * @author nrowell
@@ -25,7 +25,7 @@ public class Edge extends DefaultEdge {
 	public final OfficerRole role;
 	
 	/**
-	 * The company number for the {@link Company} vertex.
+	 * The company number for the {@link CompanyLite} vertex.
 	 */
 	private final String company_number;
 	
@@ -39,8 +39,12 @@ public class Edge extends DefaultEdge {
 	 * 
 	 * @param role
 	 * 	The {@link OfficerRole}.
+	 * @param company
+	 * 	The {@link CompanyLite} at one end of the edge.
+	 * @param officer
+	 * 	The {@link CompanyOfficerLite} at one end of the edge.
 	 */
-	public Edge(OfficerRole role, Company company, CompanyOfficer officer) {
+	public Edge(OfficerRole role, CompanyLite company, CompanyOfficerLite officer) {
 		this.role = role;
 		company_number = company.company_number;
 		appointments = officer.links.officer.appointments;

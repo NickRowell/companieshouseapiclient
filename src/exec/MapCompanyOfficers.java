@@ -13,12 +13,15 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.logging.Logger;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.Multigraph;
 
 import dm.Appointments;
 import dm.Company;
+import dm.CompanyLite;
 import dm.CompanyOfficer;
+import dm.CompanyOfficerLite;
 import dm.CompanyOfficers;
 import dm.Edge;
 import dm.Vertex;
@@ -28,6 +31,7 @@ import util.Counter;
 import util.IOUtil;
 import util.ParseUtil;
 import util.QueryUtil;
+import util.RecursiveFileStore;
 
 /**
  * This application uses the Companies House API to map the network of companies and officers.
@@ -86,28 +90,43 @@ public class MapCompanyOfficers {
 //		Scenario scenario = Scenario.PUBLIC_NON_LSE;
 		Scenario scenario = Scenario.PRIVATE;
 		
+		// Input directory (containing company numbers lists)
+		File inputDir = new File("/home/nrowell/Projects/CompaniesHouseStatsAnalysis/FreeDataProduct/");
+		
+		// Path to file containing company numbers for UK companies that trade shares on the London Stock Exchange Main Market
+		File lseFile = new File("/home/nrowell/Projects/CompaniesHouseStatsAnalysis/LondonStockExchange/ukMainMarketCompanyNumbers.txt");
+		
+		// Output directory (for map data and serialised companies/officers)
+		File outputDir = new File("/home/nrowell/Projects/CompaniesHouseStatsAnalysis/API/" + scenario.name());
+		outputDir.mkdirs();
+		
+		// Top level directory for serialised Company types
+		File companyDir = new File(outputDir, "Company");
+		companyDir.mkdir();
+
+		// Top level directory for serialised CompanyOfficer types
+		File officerDir = new File(outputDir, "CompanyOfficer");
+		officerDir.mkdir();
+		
 		// Path to file containing the company numbers to be mapped
-		File input = null;
+		File companyNumbersFile = null;
 		
 		switch(scenario) {
 		case PRIVATE:
-			input = new File("/home/nrowell/Projects/CompaniesHouseStatsAnalysis/FreeDataProduct/privCompanies.txt");
+			companyNumbersFile = new File(inputDir, "privCompanies.txt");
 			break;
 		case PUBLIC_LSE:
 		case PUBLIC_NON_LSE:
-			input = new File("/home/nrowell/Projects/CompaniesHouseStatsAnalysis/FreeDataProduct/pubCompanies.txt");
+			companyNumbersFile = new File(inputDir, "pubCompanies.txt");
 		}
 		
 		// Read company numbers, convert to order-preserving Set
-		Set<String> companyNumbersSet = new LinkedHashSet<String>(ParseUtil.parseCompanyNumbers(input));
+		Set<String> companyNumbersSet = new LinkedHashSet<String>(ParseUtil.parseCompanyNumbers(companyNumbersFile));
 		
 		logger.info("Loaded " + companyNumbersSet.size() + " company numbers to search.");
 		
 		// Optionally load details of companies trading on London Stock Exchange
 		if(scenario == Scenario.PUBLIC_LSE || scenario == Scenario.PUBLIC_NON_LSE) {
-			
-			// Path to file containing company numbers for UK companies that trade shares on the London Stock Exchange Main Market
-			File lseFile = new File("/home/nrowell/Projects/CompaniesHouseStatsAnalysis/LondonStockExchange/ukMainMarketCompanyNumbers.txt");
 			
 			// Read company numbers, convert to order-preserving Set
 			Set<String> lseCompanyNumbers = new LinkedHashSet<String>(ParseUtil.parseCompanyNumbers(lseFile));
@@ -126,10 +145,14 @@ public class MapCompanyOfficers {
 			logger.info("Retained " + companyNumbersSet.size() + " company numbers to process");
 		}
 		
+		// Create a file store used to store the complete Company data
+		RecursiveFileStore companyFileStore = new RecursiveFileStore(companyDir, 16);
+		RecursiveFileStore officerFileStore = new RecursiveFileStore(officerDir, 16);
+		
 		// Path to the file containing the map. Any existing map will be loaded and the region already mapped will be
 		// eliminated from the current search. This allows the map to be built over several runs, to combat problems
 		// with the connection.
-		File mapFile = new File("/home/nrowell/Projects/CompaniesHouseStatsAnalysis/API/" + scenario.name() + ".ser");
+		File mapFile = new File(outputDir, scenario.name() + ".ser");
 		
 		// Dump the graph to file every X companies added to the graph
 		int graphSaveInterval = 100;
@@ -145,7 +168,7 @@ public class MapCompanyOfficers {
 			
 			// Purge company numbers already mapped
 			int[] count = {0};
-			graph.vertexSet().forEach((v) -> {if(v instanceof Company) {companyNumbersSet.remove(((Company)v).company_number); count[0]++;}});
+			graph.vertexSet().forEach((v) -> {if(v instanceof CompanyLite) {companyNumbersSet.remove(((CompanyLite)v).company_number); count[0]++;}});
 			logger.info("Removed " + count[0] + " company numbers already mapped.");
 			logger.info("Retained " + companyNumbersSet.size() + " unmapped company numbers to search.");
 		}
@@ -154,8 +177,6 @@ public class MapCompanyOfficers {
 			graph = new Multigraph<>(Edge.class);
 			logger.info("Created new empty graph");
 		}
-		
-		// Set the date 
 		
 		// Types of fringe case detection:
 		// 1) Officers link not found
@@ -169,6 +190,12 @@ public class MapCompanyOfficers {
 		
 		// Read company numbers to a queue so we can process them in sequence
 		Queue<String> companyNumbersToMap = new LinkedList<>(companyNumbersSet);
+		
+		// Cache of Company and CompanyLites processed since last graph serialisation.
+		List<Pair<Company, CompanyLite>> companiesProcessedSinceLastWrite = new LinkedList<>();
+
+		// Cache of CompanyOfficer and CompanyOfficerLites processed since last graph serialisation.
+		List<Pair<CompanyOfficer, CompanyOfficerLite>> companyOfficersProcessedSinceLastWrite = new LinkedList<>();
 		
 		// Log helpful progress messages
 		Counter counter = new Counter(companyNumbersToMap.size());
@@ -191,8 +218,14 @@ public class MapCompanyOfficers {
 				continue;
 			}
 			
+			// Company is being added to the graph - create a CompanyLite
+			CompanyLite companyLite = new CompanyLite(company);
+			
+			// Cache these for storage to disk later
+			companiesProcessedSinceLastWrite.add(Pair.of(company, companyLite));
+			
 			// Add the Company to the graph as a new Vertex
-			graph.addVertex(company);
+			graph.addVertex(companyLite);
 			
 			companiesMapped++;
 			
@@ -252,14 +285,36 @@ public class MapCompanyOfficers {
 				// of the same company/officer have the same hashcode then they'll only be stored in the graph
 				// once.
 				
+				// CompanyOfficer is being added to the graph - create a CompanyOfficerLite
+				CompanyOfficerLite companyOfficerLite = new CompanyOfficerLite(officer);
+
+				// Cache these for storage to disk later
+				companyOfficersProcessedSinceLastWrite.add(Pair.of(officer, companyOfficerLite));
+				
 				// The officer may already be in the graph if encountered when processing a previous company...
-				graph.addVertex(officer);
+				graph.addVertex(companyOfficerLite);
 				
 				// ...however the connection is always new to the graph
-				graph.addEdge(company, officer, new Edge(role, company, officer));
+				graph.addEdge(companyLite, companyOfficerLite, new Edge(role, companyLite, companyOfficerLite));
 			}
 			
 			if(companiesMapped % graphSaveInterval == 0) {
+				
+				logger.info("Writing Company data to file...");
+				
+				// Store Companys to disk; set file paths in the CompanyLites; clear cache.
+				for(Pair<Company, CompanyLite> pair : companiesProcessedSinceLastWrite) {
+					pair.getRight().file_link = companyFileStore.storeObject(pair.getLeft()).getAbsolutePath();
+				}
+				companiesProcessedSinceLastWrite.clear();
+
+				logger.info("Writing CompanyOfficer data to file...");
+				
+				// Store Companys to disk; set file paths in the CompanyLites; clear cache.
+				for(Pair<CompanyOfficer, CompanyOfficerLite> pair : companyOfficersProcessedSinceLastWrite) {
+					pair.getRight().file_link = officerFileStore.storeObject(pair.getLeft()).getAbsolutePath();
+				}
+				companyOfficersProcessedSinceLastWrite.clear();
 				
 				logger.info("Writing graph to file...");
 				
@@ -267,7 +322,7 @@ public class MapCompanyOfficers {
 				
 				final int[] nCompanies = {0};
 				final int[] nOfficers = {0};
-				graph.vertexSet().forEach((v) -> {if(v instanceof Company) nCompanies[0]++; else nOfficers[0]++;});
+				graph.vertexSet().forEach((v) -> {if(v instanceof CompanyLite) nCompanies[0]++; else nOfficers[0]++;});
 				
 				logger.info("Total number of companies / officers mapped = " + nCompanies[0] + " / " + nOfficers[0]);
 				
@@ -288,13 +343,29 @@ public class MapCompanyOfficers {
 		
 		// Final write of graph to file; overwrite existing graph
 
+		logger.info("Writing Company data to file...");
+		
+		// Store Companys to disk; set file paths in the CompanyLites; clear cache.
+		for(Pair<Company, CompanyLite> pair : companiesProcessedSinceLastWrite) {
+			pair.getRight().file_link = companyFileStore.storeObject(pair.getLeft()).getAbsolutePath();
+		}
+		companiesProcessedSinceLastWrite.clear();
+
+		logger.info("Writing CompanyOfficer data to file...");
+		
+		// Store Companys to disk; set file paths in the CompanyLites; clear cache.
+		for(Pair<CompanyOfficer, CompanyOfficerLite> pair : companyOfficersProcessedSinceLastWrite) {
+			pair.getRight().file_link = officerFileStore.storeObject(pair.getLeft()).getAbsolutePath();
+		}
+		companyOfficersProcessedSinceLastWrite.clear();
+		
 		logger.info("Writing graph to file...");
 		
 		IOUtil.serialize(mapFile, graph);
 		
 		final int[] nCompanies = {0};
 		final int[] nOfficers = {0};
-		graph.vertexSet().forEach((v) -> {if(v instanceof Company) nCompanies[0]++; else nOfficers[0]++;});
+		graph.vertexSet().forEach((v) -> {if(v instanceof CompanyLite) nCompanies[0]++; else nOfficers[0]++;});
 		
 		logger.info("Total number of companies / officers mapped = " + nCompanies[0] + " / " + nOfficers[0]);
 		

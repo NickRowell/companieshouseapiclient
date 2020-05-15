@@ -24,85 +24,75 @@
 package dm;
 
 import java.io.Serializable;
-import java.util.Date;
-
-import enums.api.OfficerRole;
 
 /**
- * Details of a company officer.
+ * Stores very limited data on a {@link CompanyOfficer} that is only required to uniquely identify it when building
+ * a graph. This provides significant memory optimzation. The full data for the {@link CompanyOfficer} is stored to
+ * a file on disk for retrieval if needed.
  * 
  * @author nrowell
  * @version $Id$
  */
-public class CompanyOfficer implements Serializable {
+public class CompanyOfficerLite implements Serializable, Vertex {
 	
 	/**
 	 * The serialVersionUID.
 	 */
-	private static final long serialVersionUID = 7278261155140209617L;
-	
+	private static final long serialVersionUID = -5821014163503901524L;
+
+	/**
+	 * Link to file containing a serialised {@link CompanyOfficer} containing the complete data.
+	 */
+	public String file_link;
 	/**
 	 * The officer's name.
 	 */
 	public String name;
 	/**
-	 * The officer's occupation.
-	 */
-	public String occupation;
-	/**
-	 * The officer's nationality.
-	 */
-	public String nationality;
-	/**
-	 * The officer's country of residence.
-	 */
-	public String country_of_residence;
-	/**
-	 * Date appointed.
-	 */
-	public Date appointed_on;
-	/**
-	 * Date resigned.
-	 */
-	public Date resigned_on;
-	/**
 	 * Date of birth.
 	 */
 	public DateYMD date_of_birth;
 	/**
-	 * The officer's role.
-	 */
-	public OfficerRole officer_role;
-	/**
 	 * Links to relevant URL resources.
 	 */
 	public Links links;
-	/**
-	 * The officer's address.
-	 */
-	public Address address;
 	
 	/**
 	 * The default constructor.
 	 */
-	public CompanyOfficer() {
+	public CompanyOfficerLite() {
 		
 	}
 	
 	/**
+	 * Constructor used to derive a {@link CompanyOfficerLite} from a {@link CompanyOfficer}.
+	 * 
+	 * @param fullOfficer
+	 * 	The {@link CompanyOfficer} containing full data; the relevant fields will be picked out to initialise 
+	 * this {@link CompanyOfficerLite}.
+	 */
+	public CompanyOfficerLite(CompanyOfficer fullOfficer) {
+		name = fullOfficer.name;
+		date_of_birth = fullOfficer.date_of_birth;
+		links = new Links();
+		links.officer = new OfficerLink();
+		links.officer.appointments = fullOfficer.links.officer.appointments;
+	}
+	
+	/**
 	 * Constructor taking only the appointments part of the officer links field. This uniquely identifies
-	 * the {@link CompanyOfficer}, and is the field used in the {@link #equals(Object)} and {@link #hashCode()}
+	 * the {@link CompanyOfficerLite}, and is the field used in the {@link #equals(Object)} and {@link #hashCode()}
 	 * methods. The other fields are not populated.
 	 * 
 	 * @param appointments
-	 * 	A string containing the officer appointments link.
+	 * 	The appointments link for the officer.
 	 */
-	public CompanyOfficer(String appointments) {
+	public CompanyOfficerLite(String appointments) {
 		links = new Links();
 		links.officer = new OfficerLink();
 		links.officer.appointments = appointments;
 	}
-    
+	
     /**
      * {@inheritDoc}
      */
@@ -118,7 +108,7 @@ public class CompanyOfficer implements Serializable {
         if (getClass() != obj.getClass()) {
             return false;
         }
-        final CompanyOfficer other = (CompanyOfficer) obj;
+        final CompanyOfficerLite other = (CompanyOfficerLite) obj;
         
         // If appointments links are equal then the two officers are the same people
         if(links.officer.appointments.equals(other.links.officer.appointments)) {
